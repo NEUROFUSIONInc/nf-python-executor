@@ -1,7 +1,11 @@
 from typing import Optional
-
-from fastapi import FastAPI
+from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import sys
+from io import StringIO
+import contextlib
+import traceback
 
 app = FastAPI()
 
@@ -9,32 +13,65 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods="GET",
+    allow_methods=["GET", "POST"],
     allow_headers=["*"]
 )
 
-class Album():
-    def __init__(self, id, title, artist, price, image_url):
-         self.id = id
-         self.title = title
-         self.artist = artist
-         self.price = price
-         self.image_url = image_url
-
-albums = [ 
-    Album(1, "You, Me and an App Id", "Daprize", 10.99, "https://aka.ms/albums-daprlogo"),
-    Album(2, "Seven Revision Army", "The Blue-Green Stripes", 13.99, "https://aka.ms/albums-containerappslogo"),
-    Album(3, "Scale It Up", "KEDA Club", 13.99, "https://aka.ms/albums-kedalogo"),
-    Album(4, "Lost in Translation", "MegaDNS", 12.99,"https://aka.ms/albums-envoylogo"),
-    Album(5, "Lock Down Your Love", "V is for VNET", 12.99, "https://aka.ms/albums-vnetlogo"),
-    Album(6, "Sweet Container O' Mine", "Guns N Probeses", 14.99, "https://aka.ms/albums-containerappslogo")
-]
+class ScriptRequest(BaseModel):
+    guid: str
+    script: str
 
 @app.get("/")
 def read_root():
-    return {"Access /albums to see the list of albums"}
+    return {"message": "Hit /execute to run a script"}
 
+@app.post("/execute")
+async def execute_script(request: ScriptRequest):
+    try:
+        # Create string buffer to capture stdout
+        output_buffer = StringIO()
+        
+        # Create a safe namespace for script execution
+        namespace = {
+            '__builtins__': {
+                name: getattr(__builtins__, name)
+                for name in ['abs', 'all', 'any', 'bin', 'bool', 'dict', 'float', 
+                           'int', 'len', 'list', 'max', 'min', 'range', 'round', 
+                           'str', 'sum', 'tuple', 'zip']
+            }
+        }
 
-@app.get("/albums")
-def get_albums():
-    return albums
+        # Capture stdout and execute script
+        with contextlib.redirect_stdout(output_buffer):
+            try:
+                exec(request.script, namespace)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": str(e),
+                        "traceback": traceback.format_exc()
+                    }
+                )
+
+        # Get stdout and output variable
+        stdout = output_buffer.getvalue()
+        script_output = namespace.get("output", None)
+
+        return {
+            "guid": request.guid,
+            "stdout": stdout,
+            "output": script_output,
+            "success": True
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Internal server error occurred",
+                "message": str(e)
+            }
+        )
