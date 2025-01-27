@@ -1,0 +1,44 @@
+name: Trigger auto deployment for nf-python-executor
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/nf-python-executor-AutoDeployTrigger-68d040cf-87dd-430c-ba2a-68f6515149c5.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:
+      
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.NFPYTHONEXECUTOR_AZURE_CREDENTIALS }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}/src
+          _dockerfilePathKey_: _dockerfilePath_
+          registryUrl: ca55f0361368acr.azurecr.io
+          registryUsername: ${{ secrets.NFPYTHONEXECUTOR_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.NFPYTHONEXECUTOR_REGISTRY_PASSWORD }}
+          containerAppName: nf-python-executor
+          resourceGroup: neurofusion-rg
+          imageToBuild: ca55f0361368acr.azurecr.io/nf-python-executor:${{ github.sha }}
+          
+            
+
+     
+
