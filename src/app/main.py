@@ -1,8 +1,6 @@
-from typing import Optional
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import sys
 from io import StringIO
 import contextlib
 import traceback
@@ -31,15 +29,8 @@ async def execute_script(request: ScriptRequest):
         # Create string buffer to capture stdout
         output_buffer = StringIO()
         
-        # Create a safe namespace for script execution
-        namespace = {
-            '__builtins__': {
-                name: getattr(__builtins__, name)
-                for name in ['abs', 'all', 'any', 'bin', 'bool', 'dict', 'float', 
-                           'int', 'len', 'list', 'max', 'min', 'range', 'round', 
-                           'str', 'sum', 'tuple', 'zip']
-            }
-        }
+        # Create namespace with full Python functionality
+        namespace = {'__name__': '__main__'}
 
         # Capture stdout and execute script
         with contextlib.redirect_stdout(output_buffer):
